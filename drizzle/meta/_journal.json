@@ -8,6 +8,13 @@
       "when": 1789147137143,
       "tag": "0000_futuristic_maginty",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789149787781,
+      "tag": "0001_green_fantastic_four",
+      "breakpoints": true
     }
   ]
 }

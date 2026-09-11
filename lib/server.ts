@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { openReading } from "@/lib/model";
 import { quoteById, type Preference } from "@/content/quotes";
 export class HttpError extends Error{constructor(public status:number,message:string){super(message)}}
 export function db(){if(!env.DB)throw new HttpError(503,"书页暂时没有准备好，请稍后重试。");return env.DB}
@@ -9,10 +10,20 @@ export async function hash(value:string){return Array.from(new Uint8Array(await 
 export function ownerToken(req:Request){const token=req.headers.get("cookie")?.match(/(?:^|;\s*)book_owner=([a-f0-9]{64})(?:;|$)/)?.[1];return token||null}
 export function newToken(){return Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b=>b.toString(16).padStart(2,"0")).join("")}
 export function ownerCookie(req:Request,token:string){return `book_owner=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=7200${new URL(req.url).protocol==="https:"?"; Secure":""}`}
-export type ReadingRow={id:string;owner_hash:string;topic:string;preference:Preference;quote_ids:string;expires_at:number;created_at:number};
+export type ReadingRow={id:string;owner_hash:string;topic:string;preference:Preference;quote_ids:string;expires_at:number;created_at:number;generation_status:"editorial"|"pending"|"ready"|"failed";model_data:string|null};
 export async function cleanup(){const now=Date.now();await db().batch([db().prepare("DELETE FROM readings WHERE expires_at <= ?").bind(now),db().prepare("DELETE FROM rate_limits WHERE expires_at <= ?").bind(now)])}
 export async function limit(req:Request,token:string){const now=Date.now();const window=Math.floor(now/3600000);const ip=req.headers.get("cf-connecting-ip")||"local";const key=await hash(`${ip}:${window}:book-create`);const r=await db().prepare("INSERT INTO rate_limits(key,count,expires_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count").bind(key,(window+1)*3600000).first<{count:number}>();if(!r||r.count>60)throw new HttpError(429,"这一小时已经翻过很多页了，请稍后再来。");}
-export async function owned(req:Request,id:string){if(!/^[a-f0-9-]{36}$/.test(id))throw new HttpError(404,"这页已失效或无法访问。");const token=ownerToken(req);if(!token)throw new HttpError(404,"这页已失效或无法访问。");const row=await db().prepare("SELECT * FROM readings WHERE id = ? AND owner_hash = ? AND expires_at > ?").bind(id,await hash(token),Date.now()).first<ReadingRow>();if(!row)throw new HttpError(404,"这页已失效或无法访问。");return row}
+export async function owned(req:Request,id:string){if(!/^[a-f0-9-]{36}$/.test(id))throw new HttpError(404,"这页已失效或无法访问。");const token=ownerToken(req);if(!token)throw new HttpError(404,"这页已失效或无法访问。");const row=await db().prepare("SELECT * FROM readings WHERE id = ? AND owner_hash = ? AND expires_at > ?").bind(id,await hash(token),Date.now()).first<ReadingRow>();if(!row)throw new HttpError(404,"这页已失效或无法访问。");if(row.generation_status==="pending")throw new HttpError(409,"书签还在准备，请稍后重试。");if(row.generation_status==="failed")throw new HttpError(503,"这次没能准备好书签，请重新开始。");return row}
 export function slots(row:ReadingRow){return (JSON.parse(row.quote_ids) as string[]).map((id,index)=>({id:String(index+1),available:!!quoteById(id)}))}
 export function selected(row:ReadingRow,slot:unknown){if(typeof slot!=="string"||! /^[1-3]$/.test(slot))throw new HttpError(400,"请选择这本书里的书签。");const ids=JSON.parse(row.quote_ids) as string[];const quote=quoteById(ids[Number(slot)-1]);if(!quote)throw new HttpError(410,"这段原文暂时撤下了，可以看看其他书签。");return quote}
-export function guidance(row:ReadingRow,quote:NonNullable<ReturnType<typeof quoteById>>){return {origin:"editorial" as const,interpretation:quote.note,small_action:row.preference==="action"&&row.topic==="start"?quote.action:null}}
+export async function guidance(req:Request,row:ReadingRow,quote:NonNullable<ReturnType<typeof quoteById>>){if(row.generation_status==="ready"&&row.model_data){const data=await openReading(row.model_data,ownerToken(req)!,row.id);const b=data.bookmarks.find(b=>b.quote_id===quote.id);if(!b)throw new HttpError(503,"这页解读暂时无法读取，请重试。");return {origin:"ai" as const,interpretation:b.interpretation,small_action:b.small_action}}return {origin:"editorial" as const,interpretation:quote.note,small_action:row.preference==="action"&&row.topic==="start"?quote.action:null}}
+
+export async function modelLimit(req:Request){
+ const now=Date.now(),hour=Math.floor(now/3600000),day=Math.floor((now+8*3600000)/86400000);
+ const ipKey=await hash(`${req.headers.get("cf-connecting-ip")||"local"}:${hour}:model`);
+ const ip=await db().prepare("INSERT INTO rate_limits(key,count,expires_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count").bind(ipKey,(hour+1)*3600000).first<{count:number}>();
+ if(!ip||ip.count>10)throw new HttpError(429,"这一小时的个性化阅读次数已用完，请稍后再来；仍可选择只读一句。");
+ const cap=Number(env.AI_DAILY_LIMIT||80);
+ const total=await db().prepare("INSERT INTO rate_limits(key,count,expires_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count").bind(`model-day:${day}`,(day+1)*86400000-8*3600000).first<{count:number}>();
+ if(!total||total.count>(Number.isFinite(cap)&&cap>0?cap:80))throw new HttpError(429,"今天的个性化阅读暂时用完了，仍可选择只读一句，明天再来。");
+}
