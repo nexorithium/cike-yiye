@@ -7,3 +7,4 @@
 - 390px 阅读页与首页、320px 首页无水平溢出；桌面阅读主文字16px。图片加载与桌面/移动截图已检查。
 - 浏览器扩展在 html/body 注入属性引发的开发环境 hydration warning，来源为用户浏览器扩展；未通过修改或关闭用户扩展规避。
 - 当前不含模型调用，不以以上检查宣称真实用户贴合率或心理有效性。公众试用与人工安全审核尚未进行。
+- WebMCP：浏览器实际注册 start_situation_reading，schema/annotations 已核对；无效 topic 被拒绝，有效 topic=read 返回 ready 与三枚书签，页面同步进入选书签。
