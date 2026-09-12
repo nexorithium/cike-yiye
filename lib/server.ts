@@ -28,3 +28,12 @@ export async function modelLimit(req:Request){
  const total=await db().prepare("INSERT INTO rate_limits(key,count,expires_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count").bind(`model-day:${day}`,(day+1)*86400000-8*3600000).first<{count:number}>();
  if(!total||total.count>(Number.isFinite(cap)&&cap>0?cap:80))throw new HttpError(429,"今天的个性化阅读暂时用完了，仍可选择只读一句，明天再来。");
 }
+
+export async function searchLimit(req:Request){
+ const now=Date.now(),hour=Math.floor(now/3600000),day=Math.floor((now+8*3600000)/86400000);
+ const ipKey=await hash(`${req.headers.get("cf-connecting-ip")||"local"}:${hour}:zhihu-search`);
+ const ip=await db().prepare("INSERT INTO rate_limits(key,count,expires_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count").bind(ipKey,(hour+1)*3600000).first<{count:number}>();
+ if(!ip||ip.count>30)throw new HttpError(429,"这一小时已经找过很多次了，请稍后再来。");
+ const total=await db().prepare("INSERT INTO rate_limits(key,count,expires_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count").bind(`zhihu-search-day:${day}`,(day+1)*86400000-8*3600000).first<{count:number}>();
+ if(!total||total.count>3000)throw new HttpError(429,"知乎搜索今天有些忙，请明天再来看看。");
+}
