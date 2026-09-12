@@ -21,10 +21,10 @@ export async function POST(req:Request){
   }
   if(!row){
    const id=crypto.randomUUID(),now=Date.now();
-   // Explicit no-input literary browsing needs no external model or user data.
-   const editorial=!text.trim()&&chosen==="read";
+   // Pure reading and preset topics without a configured model use editorial guidance.
+   const editorial=(!text.trim()&&chosen==="read")||(!env.ZHIHU_ACCESS_SECRET&&!!chosen);
    if(!editorial&&!env.ZHIHU_ACCESS_SECRET)throw new HttpError(503,"个性化解读暂时无法连接，请稍后重试，或选择只读一句。");
-   const ids=editorial?readingPool([],"read",id):[];
+   const ids=editorial?readingPool([],chosen||"read",id):[];
    await db().prepare("INSERT OR IGNORE INTO readings(id,owner_hash,request_key,topic,preference,quote_ids,created_at,expires_at,generation_status) VALUES(?,?,?,?,?,?,?,?,?)")
     .bind(id,owner,request_key,chosen||"read",preference,JSON.stringify(ids),now,now+(editorial?1800000:120000),editorial?"editorial":"pending").run();
    row=await find();
@@ -34,20 +34,34 @@ export async function POST(req:Request){
     try{
      await modelLimit(req);
      const generated=await generateReading(env.ZHIHU_ACCESS_SECRET!,env.ZHIHU_MODEL||"zhida-fast-1p5",text.trim(),chosen,preference);
-     if(generated.status!=="ready"){
+     if(generated.status==="support"){
       await db().prepare("DELETE FROM readings WHERE id = ?").bind(id).run();
       return json({status:generated.status});
+     }else if(generated.status==="fallback"&&chosen){
+      await db().prepare("UPDATE readings SET topic=?,quote_ids=?,model_data=NULL,generation_status='editorial',expires_at=? WHERE id=? AND generation_status='pending'")
+       .bind(chosen,JSON.stringify(readingPool([],chosen,id)),Date.now()+1800000,id).run();
+      row=await find();
+     }else if(generated.status==="fallback"){
+      await db().prepare("DELETE FROM readings WHERE id = ?").bind(id).run();
+      return json({status:generated.status});
+     }else{
+      const encrypted=await sealReading(generated,token,id);
+      await db().prepare("UPDATE readings SET topic=?,quote_ids=?,model_data=?,generation_status='ready',expires_at=? WHERE id=? AND generation_status='pending'")
+       .bind(generated.topic,JSON.stringify(readingPool(generated.bookmarks.map(b=>b.quote_id),generated.topic,id)),encrypted,Date.now()+1800000,id).run();
+      row=await find();
      }
-     const encrypted=await sealReading(generated,token,id);
-     await db().prepare("UPDATE readings SET topic=?,quote_ids=?,model_data=?,generation_status='ready',expires_at=? WHERE id=? AND generation_status='pending'")
-      .bind(generated.topic,JSON.stringify(readingPool(generated.bookmarks.map(b=>b.quote_id),generated.topic,id)),encrypted,Date.now()+1800000,id).run();
-     row=await find();
     }catch(e){
      console.error("reading_generation_failed",{kind:e instanceof Error?e.name:"unknown"});
+     if(chosen){
+      await db().prepare("UPDATE readings SET topic=?,quote_ids=?,model_data=NULL,generation_status='editorial',expires_at=? WHERE id=? AND generation_status='pending'")
+       .bind(chosen,JSON.stringify(readingPool([],chosen,id)),Date.now()+1800000,id).run();
+      row=await find();
+     }else{
      await db().prepare("UPDATE readings SET generation_status='failed' WHERE id=? AND generation_status='pending'").bind(id).run();
      if(e instanceof HttpError)throw e;
      if(e instanceof ModelServiceError&&e.status===429)throw new HttpError(429,"知乎直答暂时限制了调用，请过一会儿再试。输入已保留，也可以先选择只读一句。");
      throw new HttpError(503,"这次没能生成贴合的解读。你的输入还在，可以重试，或选择只读一句。");
+     }
     }
    }
   }
