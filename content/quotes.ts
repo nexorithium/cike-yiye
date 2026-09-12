@@ -1,6 +1,7 @@
+import expandedQuotes from "./expanded-quotes.json";
 export type Topic = "start" | "rest" | "read";
 export type Preference = "auto" | "comfort" | "clarity" | "action";
-export type Quote = {id:string; version:1; text:string; author:string; work:string; era:string; source:string; location:string; topics:Topic[]; meaning:string; note:string; action:string|null; status:"published"|"withdrawn"; verifiedAt:string; rights:string};
+export type Quote = {id:string; version:1; text:string; author:string; work:string; era:string; source:string; location:string; topics:Topic[]; meaning:string; note:string; action:string|null; status:"published"|"withdrawn"; verifiedAt:string; rights:string; annotationKind?:"work-guide"; sourceKind?:"corpus"; fullText?:string; themes?:string[]; upstreamId?:string; upstreamParagraph?:number};
 const wiki=(page:string,oldid?:number)=>oldid?`https://zh.wikisource.org/w/index.php?title=${encodeURIComponent(page)}&oldid=${oldid}`:`https://zh.wikisource.org/wiki/${encodeURIComponent(page)}`;
 type Row=[string,string,string,string,string,number|undefined,string,Topic[],string,string,string|null];
 const rows:Row[]=[
@@ -66,4 +67,5 @@ const rows:Row[]=[
 ["临行密密缝，\n意恐迟迟归。","孟郊","游子吟","唐","遊子吟_(孟郊)",1982411,"第三、四句",["rest","read"],"临行前把衣裳缝得细密，担心游子很久才回来。","缝得更密的针脚，承载着远行前的牵挂。它描写的是一份心意，不是一笔需要偿还的账。可以珍惜收到过的照顾，也保留自己安排生活的空间。",null]
 ];
 export const quotes:Quote[]=rows.map((r,i)=>({id:`q${String(i+1).padStart(3,"0")}`,version:1,text:r[0],author:r[1],work:r[2],era:r[3],source:wiki(r[4],r[5]),location:r[6],topics:r[7],meaning:r[8],note:r[9],action:r[10],status:"published",verifiedAt:"2026-09-12",rights:"古典原文；仅转为简体并调整标点、换行，不使用现代译文或注释。保留作者、作品、来源及异文说明。"}));
+quotes.push(...expandedQuotes as Quote[]);
 export const quoteById=(id:string)=>quotes.find(q=>q.id===id&&q.status==="published");

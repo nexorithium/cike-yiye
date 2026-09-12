@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 import { body,cleanup,db,guard,hash,HttpError,json,limit,modelLimit,newToken,ownerCookie,ownerToken,slots,type ReadingRow } from "@/lib/server";
-import { selectQuotes } from "@/lib/reading";
+import { readingPool } from "@/lib/reading";
 import { generateReading,sealReading,ModelServiceError } from "@/lib/model";
 const schema=z.object({text:z.string().max(500).default(""),topic:z.enum(["start","rest","read"]).optional(),preference:z.enum(["auto","comfort","clarity","action"]).default("auto"),request_key:z.string().uuid()}).strict();
 export async function POST(req:Request){
@@ -24,7 +24,7 @@ export async function POST(req:Request){
    // Explicit no-input literary browsing needs no external model or user data.
    const editorial=!text.trim()&&chosen==="read";
    if(!editorial&&!env.ZHIHU_ACCESS_SECRET)throw new HttpError(503,"个性化解读暂时无法连接，请稍后重试，或选择只读一句。");
-   const ids=editorial?selectQuotes("read","comfort").map(q=>q.id):[];
+   const ids=editorial?readingPool([],"read",id):[];
    await db().prepare("INSERT OR IGNORE INTO readings(id,owner_hash,request_key,topic,preference,quote_ids,created_at,expires_at,generation_status) VALUES(?,?,?,?,?,?,?,?,?)")
     .bind(id,owner,request_key,chosen||"read",preference,JSON.stringify(ids),now,now+(editorial?1800000:120000),editorial?"editorial":"pending").run();
    row=await find();
@@ -40,7 +40,7 @@ export async function POST(req:Request){
      }
      const encrypted=await sealReading(generated,token,id);
      await db().prepare("UPDATE readings SET topic=?,quote_ids=?,model_data=?,generation_status='ready',expires_at=? WHERE id=? AND generation_status='pending'")
-      .bind(generated.topic,JSON.stringify(generated.bookmarks.map(b=>b.quote_id)),encrypted,Date.now()+1800000,id).run();
+      .bind(generated.topic,JSON.stringify(readingPool(generated.bookmarks.map(b=>b.quote_id),generated.topic,id)),encrypted,Date.now()+1800000,id).run();
      row=await find();
     }catch(e){
      console.error("reading_generation_failed",{kind:e instanceof Error?e.name:"unknown"});
@@ -52,7 +52,7 @@ export async function POST(req:Request){
    }
   }
   if(!row)throw new HttpError(503,"书签暂未准备好，请重试。");
-  return json({id:row.id,status:"ready",topic:row.topic,preference:row.preference,bookmarks:slots(row),expires_at:row.expires_at,origin:row.generation_status==="ready"?"ai":"editorial"});
+  return json({id:row.id,status:"ready",topic:row.topic,preference:row.preference,bookmarks:await slots(req,row,token),expires_at:row.expires_at,origin:row.generation_status==="ready"?"ai":"editorial"});
  });
  for(const [key,value] of Object.entries(headers))response.headers.set(key,value);
  return response;

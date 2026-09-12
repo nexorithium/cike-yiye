@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/chinese-poetry/chinese-poetry",
+  "commit": "b8594f81a89752241442f2ce267d6f66f96704ee",
+  "path": "全唐诗/唐诗三百首.json",
+  "selectedExcerpts": 540,
+  "conversion": "OpenCC t2s",
+  "license": "MIT; public/NOTICE-chinese-poetry.txt",
+  "review": "原始记录与段落可追溯；过滤已识别的错署、乱码及近似重复；非逐段古籍版本校勘。导读说明整首作品，不是逐句译文。"
+}

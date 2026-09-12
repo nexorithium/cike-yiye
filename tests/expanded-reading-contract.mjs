@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+await build({stdin:{contents:'export * from "./lib/server";export {sealReading} from "./lib/model";export {quotes} from "./content/quotes";',resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',outfile:'.sites-runtime/expanded-reading-test.mjs',plugins:[{name:'worker-env-test',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:'export const env={};'}))}}]});
+const {slots,guidance,selected,sealReading,quotes}=await import('../.sites-runtime/expanded-reading-test.mjs');
+const token='c'.repeat(64),id=crypto.randomUUID();const quoteIds=quotes.slice(0,24).map(q=>q.id);
+const data={status:'ready',topic:'rest',allow_action:false,bookmarks:[{quote_id:'q001',interpretation:'你已经为这件事付出很多，此刻感到失望是可以理解的。',small_action:null}]};
+const row={id,generation_status:'ready',model_data:await sealReading(data,token,id),quote_ids:JSON.stringify(quoteIds),topic:'rest',preference:'comfort'};
+const fresh=new Request('http://localhost/api/readings');const cards=await slots(fresh,row,token);assert.equal(cards.length,24);assert.equal(cards[0].origin,'ai');assert.ok(cards.slice(1).every(b=>b.origin==='editorial'));
+const owned=new Request('http://localhost/',{headers:{cookie:`book_owner=${token}`}});assert.equal((await guidance(owned,row,quotes[0])).origin,'ai');assert.equal((await guidance(owned,row,quotes[23])).origin,'editorial');assert.equal(selected(row,'24').id,'q024');for(const id of ['0','25','1.5',1])assert.throws(()=>selected(row,id));
+console.log('PASS: new AI owner cookie, 1 AI + 23 editorial cards, extended guidance, slot boundary validation.');
