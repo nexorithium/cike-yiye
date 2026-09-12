@@ -4,7 +4,7 @@ await build({entryPoints:['lib/model.ts'],bundle:true,platform:'node',format:'es
 const {parseModelReading,sealReading,openReading,generateReading}=await import('../.sites-runtime/model-test.mjs');
 const good={status:'ready',topic:'rest',allow_action:false,bookmarks:[{quote_id:'q001',interpretation:'你已经为这件事付出很多，此刻感到失望是可以理解的。',small_action:'继续努力'}]};
 const parsed=parseModelReading(JSON.stringify(good));assert.equal(parsed.bookmarks[0].small_action,null);
-assert.throws(()=>parseModelReading(JSON.stringify({...good,bookmarks:[{...good.bookmarks[0],quote_id:'q999'}]})));
+assert.throws(()=>parseModelReading(JSON.stringify({...good,bookmarks:[{...good.bookmarks[0],quote_id:'q2000'}]})));
 assert.throws(()=>parseModelReading(JSON.stringify({...good,bookmarks:[good.bookmarks[0],good.bookmarks[0]]})));
 assert.throws(()=>parseModelReading('{"status":'));
 assert.throws(()=>parseModelReading(JSON.stringify({...good,bookmarks:[]})));

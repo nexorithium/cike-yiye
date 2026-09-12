@@ -9,7 +9,7 @@ const first=await call('/api/readings','POST',{topic:'read',preference:'comfort'
 const id=first.v.id;
 const results=[];for(const bookmark_id of ['1','2','3','4','5','6','24'])results.push(await call(`/api/readings/${id}/reveal`,'POST',{bookmark_id}));
 for(const x of results)assert.equal(x.r.status,200,JSON.stringify(x.v));
-assert.equal(new Set(results.map(x=>x.v.quote.id)).size,7);assert.equal(new Set(results.map(x=>x.v.quote.work)).size,7);for(const x of results){assert.equal(x.r.status,200);assert.equal(x.v.guidance.small_action,null);assert.equal(x.v.guidance.origin,'editorial');assert.ok(/^https:\/\/(zh.wikisource.org|github.com)\//.test(x.v.quote.source))}
+assert.equal(new Set(results.map(x=>x.v.quote.id)).size,7);assert.equal(new Set(results.map(x=>x.v.quote.work)).size,7);for(const x of results){assert.equal(x.r.status,200);assert.equal(x.v.guidance.small_action,null);assert.equal(x.v.guidance.origin,'editorial');assert.ok(/^https:\/\/(zh.wikisource.org|github.com|www.gutenberg.org)\//.test(x.v.quote.source))}
 const again=await call(`/api/readings/${id}/reveal`,'POST',{bookmark_id:'1'});assert.deepEqual(again.v,results[0].v);
 const forbidden=await call(`/api/readings/${id}`,'GET',undefined,'book_owner='+'a'.repeat(64));assert.equal(forbidden.r.status,404);
 for(const [path,method,data] of [[`/api/readings/${id}/reveal`,'POST',{bookmark_id:'1'}],[`/api/readings/${id}/feedback`,'POST',{bookmark_id:'1',fit:'fit'}],[`/api/readings/${id}`,'DELETE',{}]]){const x=await call(path,method,data,'book_owner='+'b'.repeat(64));assert.equal(x.r.status,404)}

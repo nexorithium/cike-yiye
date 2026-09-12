@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/chinese-poetry/chinese-poetry",
+  "commit": "b8594f81a89752241442f2ce267d6f66f96704ee",
+  "chinese_sources": [
+    {"work": "幽梦影", "path": "幽梦影/youmengying.json", "selected": 170},
+    {"work": "论语", "path": "论语/lunyu.json", "selected": 80},
+    {"work": "孟子", "path": "四书五经/mengzi.json", "selected": 70}
+  ],
+  "foreign_source": {
+    "title": "Familiar Quotations, Ninth Edition",
+    "compiler": "John Bartlett",
+    "publication_year": 1905,
+    "project_gutenberg_ebook": 27889,
+    "url": "https://www.gutenberg.org/ebooks/27889",
+    "selected": 80,
+    "display": "English originals retained; no uncredited modern Chinese translation"
+  },
+  "total_added": 400,
+  "review": "Chinese passages retain complete source records and are converted to simplified Chinese. English quotations retain the compiler's stated author and work reference. Editorial notes describe source limits and are not presented as translations or universal advice."
+}
